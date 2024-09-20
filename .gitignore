@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+vector_database.index
+metadata.txt
+.env
+.venv/
+*_model/
+*_database.index
+*_metadata.txt
+*_weights.npy
