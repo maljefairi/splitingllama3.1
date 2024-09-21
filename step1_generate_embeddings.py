@@ -1,5 +1,5 @@
 """
-This script generates embeddings for a set of cryptography-related text samples using a pre-trained language model,
+This script generates embeddings for a set of topic-related text samples using a pre-trained language model,
 creates a FAISS index for efficient similarity search, and saves both the index and metadata.
 
 Dependencies:
@@ -14,7 +14,7 @@ The script performs the following steps:
 1. Load environment variables and API key
 2. Initialize the pre-trained model and tokenizer
 3. Define a function to generate embeddings for given text
-4. Prepare sample data (cryptography-related texts)
+4. Prepare sample data (topic-related texts)
 5. Generate embeddings for the sample texts
 6. Create and populate a FAISS index with the generated embeddings
 7. Save the FAISS index and metadata to files
@@ -33,8 +33,15 @@ load_dotenv()
 # Retrieve the Hugging Face API key from environment variables
 api_key = os.getenv("API_KEY_HUGGINGFACE")
 
+# Load the topic from topic.txt
+with open('topic.txt', 'r') as f:
+    topic = f.readlines()[-1].strip()
+
+# Create a folder with the topic name
+os.makedirs(topic, exist_ok=True)
+
 # Initialize the pre-trained model and tokenizer
-model_name = 'meta-llama/Meta-Llama-3.1-8B-Instruct'  # Using Llama 3.1 model
+model_name = 'meta-llama/Meta-Llama-3.1-405B'  # Using Llama 2 70B chat model
 tokenizer = AutoTokenizer.from_pretrained(model_name, token=api_key)
 model = AutoModel.from_pretrained(model_name, token=api_key)
 
@@ -57,13 +64,13 @@ def get_embedding(text):
     embedding = outputs.last_hidden_state[:, 0, :].squeeze().numpy()
     return embedding
 
-# Sample data - cryptography-related texts
+# Sample data - topic-related texts
 texts = [
-    "RSA is a public-key cryptosystem widely used for secure data transmission.",
-    "AES (Advanced Encryption Standard) is a symmetric encryption algorithm.",
-    "Diffie-Hellman key exchange allows two parties to establish a shared secret over an insecure channel.",
-    "Elliptic Curve Cryptography (ECC) offers smaller key sizes compared to RSA for equivalent security.",
-    "Hash functions like SHA-256 are essential for ensuring data integrity in cryptographic systems."
+    f"{topic} is a field with various important concepts and applications.",
+    f"There are several key algorithms and techniques used in {topic}.",
+    f"Security and privacy are crucial considerations in {topic}.",
+    f"{topic} has seen significant advancements in recent years.",
+    f"Understanding the fundamentals of {topic} is essential for professionals in the field."
 ]
 
 # Generate embeddings for each text in the sample data
@@ -80,16 +87,18 @@ dimension = embeddings.shape[1]  # Get the dimensionality of the embeddings
 index = faiss.IndexFlatL2(dimension)  # Create a FAISS index using L2 distance
 index.add(embeddings)  # Add the embeddings to the index
 
-# Save the FAISS index to a file
-faiss.write_index(index, 'crypto_vector_database.index')
-print(f"FAISS index saved to {os.path.abspath('crypto_vector_database.index')}")
+# Save the FAISS index to a file in the topic folder
+index_path = os.path.join(topic, f'{topic}_vector_database.index')
+faiss.write_index(index, index_path)
+print(f"FAISS index saved to {os.path.abspath(index_path)}")
 
-# Save metadata (texts) to a text file
-with open('crypto_metadata.txt', 'w', encoding='utf-8') as f:
+# Save metadata (texts) to a text file in the topic folder
+metadata_path = os.path.join(topic, f'{topic}_metadata.txt')
+with open(metadata_path, 'w', encoding='utf-8') as f:
     for text in texts:
         f.write(f"{text}\n")
-print(f"Metadata saved to {os.path.abspath('crypto_metadata.txt')}")
+print(f"Metadata saved to {os.path.abspath(metadata_path)}")
 
-print("Cryptography embeddings and metadata have been saved successfully.")
+print(f"{topic} embeddings and metadata have been saved successfully.")
 print("Current working directory:", os.getcwd())
-print("Files in the directory:", os.listdir())
+print(f"Files in the {topic} directory:", os.listdir(topic))

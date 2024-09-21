@@ -1,18 +1,18 @@
 """
-AGI System for Cryptography Query Processing and Response Generation
+AGI System for Topic-Specific Query Processing and Response Generation
 
-This script implements an Artificial General Intelligence (AGI) system specialized in cryptography,
-capable of processing queries related to cryptographic concepts, retrieving relevant information,
+This script implements an Artificial General Intelligence (AGI) system specialized in a specific topic,
+capable of processing queries related to that topic, retrieving relevant information,
 and generating appropriate responses. The system utilizes a pre-trained language model fine-tuned
-for cryptography, vector embeddings, and a FAISS index for efficient information retrieval.
+for the specific topic, vector embeddings, and a FAISS index for efficient information retrieval.
 
 Key Components:
 1. AGISystem class: The main class that encapsulates the entire AGI system functionality.
-2. Vector database: A FAISS index storing embeddings of cryptography-related text samples for efficient similarity search.
-3. Cryptography-specific model: A pre-trained language model fine-tuned for cryptography.
-4. Embedding generation: Uses the same model as the cryptography-specific model for consistency.
-5. Information retrieval: A process to fetch relevant cryptography context based on query similarity.
-6. Response generation: Utilizes the cryptography-specific model to generate appropriate responses.
+2. Vector database: A FAISS index storing embeddings of topic-related text samples for efficient similarity search.
+3. Topic-specific model: A pre-trained language model fine-tuned for the specific topic.
+4. Embedding generation: Uses the same model as the topic-specific model for consistency.
+5. Information retrieval: A process to fetch relevant context based on query similarity.
+6. Response generation: Utilizes the topic-specific model to generate appropriate responses.
 
 Dependencies:
 - torch: PyTorch library for tensor computations and neural network operations.
@@ -24,27 +24,28 @@ Dependencies:
 
 Class: AGISystem
     Attributes:
-        - index: FAISS index loaded from 'crypto_vector_database.index'
-        - metadata: List of metadata entries loaded from 'crypto_metadata.txt'
-        - model: Cryptography-specific language model
-        - tokenizer: Tokenizer corresponding to the cryptography-specific model
+        - topic: The specific topic loaded from topic.txt
+        - index: FAISS index loaded from '{topic}_vector_database.index'
+        - metadata: List of metadata entries loaded from '{topic}_metadata.txt'
+        - model: Topic-specific language model
+        - tokenizer: Tokenizer corresponding to the topic-specific model
         - device: PyTorch device (CPU or CUDA) for model computations
 
     Methods:
         - __init__(): Initializes the AGI system, loading necessary models and data.
         - get_embedding(text): Generates an embedding for the input text.
-        - retrieve_information(query_embedding, k=5): Retrieves relevant cryptography information from the vector database.
-        - generate_response(query): Processes the query and generates a response using the cryptography-specific model.
+        - retrieve_information(query_embedding, k=5): Retrieves relevant topic information from the vector database.
+        - generate_response(query): Processes the query and generates a response using the topic-specific model.
 
 Function: main()
-    Implements the main interaction loop for the AGI system, allowing users to input cryptography-related queries
+    Implements the main interaction loop for the AGI system, allowing users to input topic-related queries
     and receive responses until they choose to quit.
 
 Usage:
 1. Ensure all required dependencies are installed.
-2. Place the necessary model files, cryptography vector database, and metadata in the appropriate locations.
+2. Place the necessary model files, topic vector database, and metadata in the appropriate locations.
 3. Run the script to start the AGI system.
-4. Input cryptography-related queries when prompted and receive generated responses.
+4. Input topic-related queries when prompted and receive generated responses.
 5. Enter 'quit' to exit the system.
 
 Note: This system uses the outputs from step1_generate_embeddings.py and step2_extract_subject_weights.py.
@@ -66,15 +67,21 @@ class AGISystem:
         load_dotenv()
         api_key = os.getenv("API_KEY_HUGGINGFACE")
 
-        # Load cryptography vector database index
-        self.index = faiss.read_index('crypto_vector_database.index')
+        # Load the topic from topic.txt
+        with open('topic.txt', 'r') as f:
+            self.topic = f.readlines()[-1].strip()
+
+        # Load topic vector database index
+        index_path = os.path.join(self.topic, f'{self.topic}_vector_database.index')
+        self.index = faiss.read_index(index_path)
         
-        # Load cryptography metadata
-        with open('crypto_metadata.txt', 'r', encoding='utf-8') as f:
+        # Load topic metadata
+        metadata_path = os.path.join(self.topic, f'{self.topic}_metadata.txt')
+        with open(metadata_path, 'r', encoding='utf-8') as f:
             self.metadata = [line.strip() for line in f]
         
-        # Load cryptography-specific model and tokenizer
-        model_path = 'cryptography_model'
+        # Load topic-specific model and tokenizer
+        model_path = os.path.join(self.topic, f'{self.topic}_model')
         self.tokenizer = AutoTokenizer.from_pretrained(model_path)
         self.model = AutoModelForCausalLM.from_pretrained(
             model_path, 
@@ -107,13 +114,13 @@ class AGISystem:
         context = self.retrieve_information(query_embedding)
         
         input_text = f"{context}\nQuestion: {query}\nAnswer:"
-        inputs = self.tokenizer(input_text, return_tensors='pt', truncation=True, max_length=512)
+        inputs = self.tokenizer(input_text, return_tensors='pt', truncation=True, max_length=1000) # was 512
         inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
         
         with torch.no_grad():
             outputs = self.model.generate(
                 **inputs,
-                max_length=150,
+                max_length=1000, # was 150
                 num_return_sequences=1,
                 no_repeat_ngram_size=2,
                 early_stopping=True
@@ -125,13 +132,13 @@ class AGISystem:
         return response
 
 def main():
-    print("Initializing Cryptography AGI System...")
+    print("Initializing Topic-Specific AGI System...")
     agi_system = AGISystem()
-    print("Cryptography AGI System initialized successfully.")
+    print(f"{agi_system.topic.capitalize()} AGI System initialized successfully.")
 
     try:
         while True:
-            query = input("\nEnter your cryptography-related question (or 'quit' to exit): ")
+            query = input(f"\nEnter your {agi_system.topic}-related question (or 'quit' to exit): ")
             if query.lower() == 'quit':
                 break
             
@@ -141,7 +148,7 @@ def main():
     except KeyboardInterrupt:
         print("\nExiting the program...")
     finally:
-        print("Thank you for using the Cryptography AGI System.")
+        print(f"Thank you for using the {agi_system.topic.capitalize()} AGI System.")
 
 if __name__ == "__main__":
     main()

@@ -1,7 +1,7 @@
 """
-Step 2: Extract Cryptography Weights and Create Cryptography-Specific Model
+Step 2: Extract Subject Weights and Create Subject-Specific Model
 
-This script uses the outputs from step1_generate_embeddings.py to create a cryptography-specific model.
+This script uses the outputs from step1_generate_embeddings.py to create a subject-specific model.
 
 Dependencies:
 - torch: PyTorch library for tensor computations
@@ -15,14 +15,13 @@ The script follows these main steps:
 1. Load environment variables and API key
 2. Initialize the pre-trained model and tokenizer
 3. Load the FAISS index and metadata created in step 1
-4. Extract cryptography-specific weights using the loaded index and metadata
-5. Create and save a cryptography-specific model
+4. Extract subject-specific weights using the loaded index and metadata
+5. Create and save a subject-specific model
 
 Usage:
 1. Ensure that step1_generate_embeddings.py has been run and its outputs are available.
-2. Run this script to extract cryptography weights and create a cryptography-specific model.
-3. The resulting cryptography weights will be saved in 'cryptography_weights.npy'.
-4. The cryptography-specific model will be saved in a directory named 'cryptography_model'.
+2. Run this script to extract subject weights and create a subject-specific model.
+3. The resulting subject weights and model will be saved in the subject-specific folder.
 
 Note: This script assumes that the necessary environment variables and API keys are properly set up.
 """
@@ -43,6 +42,10 @@ load_dotenv()
 # Retrieve the Hugging Face API key from environment variables
 api_key = os.getenv("API_KEY_HUGGINGFACE")
 
+# Load the topic from topic.txt
+with open('topic.txt', 'r') as f:
+    topic = f.readlines()[-1].strip()
+
 # Initialize the pre-trained model and tokenizer
 model_name = 'meta-llama/Meta-Llama-3.1-8B-Instruct'
 tokenizer = AutoTokenizer.from_pretrained(model_name, token=api_key)
@@ -56,82 +59,86 @@ model = AutoModelForCausalLM.from_pretrained(
 )
 
 # Load the FAISS index and metadata from step 1
-index = faiss.read_index("crypto_vector_database.index")
-with open("crypto_metadata.txt", "r") as f:
+index_path = os.path.join(topic, f'{topic}_vector_database.index')
+index = faiss.read_index(index_path)
+metadata_path = os.path.join(topic, f'{topic}_metadata.txt')
+with open(metadata_path, "r") as f:
     metadata = [line.strip() for line in f]
 
-# Function to extract cryptography-specific weights
-def extract_cryptography_weights():
+# Function to extract subject-specific weights
+def extract_subject_weights():
     # Get all embeddings from the index
     total_vectors = index.ntotal
     d = index.d
     _, all_embeddings = index.search(np.zeros((1, d), dtype=np.float32), k=total_vectors)
     
     # Compute the centroid (average) of all embeddings
-    crypto_centroid = np.mean(all_embeddings, axis=1)
+    subject_centroid = np.mean(all_embeddings, axis=1)
     
     # Normalize the centroid
-    crypto_weights = crypto_centroid / np.linalg.norm(crypto_centroid)
+    subject_weights = subject_centroid / np.linalg.norm(subject_centroid)
     
-    return crypto_weights.squeeze()
+    return subject_weights.squeeze()
 
-# Extract weights for cryptography
-print("Extracting weights for cryptography...")
-crypto_weights = extract_cryptography_weights()
+# Extract weights for the subject
+print(f"Extracting weights for {topic}...")
+subject_weights = extract_subject_weights()
 
-# Save cryptography-specific weights
-np.save("cryptography_weights.npy", crypto_weights)
-print("Cryptography-specific weights saved to cryptography_weights.npy")
+# Save subject-specific weights
+weights_path = os.path.join(topic, f'{topic}_weights.npy')
+np.save(weights_path, subject_weights)
+print(f"{topic}-specific weights saved to {weights_path}")
 
-# Function to create a cryptography-specific model
-def create_cryptography_model(crypto_weights):
+# Function to create a subject-specific model
+def create_subject_model(subject_weights):
     # Define device map for efficient memory usage
     device_map = "auto"
     
     # Load the original model with gradient checkpointing enabled
-    crypto_model = AutoModelForCausalLM.from_pretrained(
+    subject_model = AutoModelForCausalLM.from_pretrained(
         model_name, 
         token=api_key, 
         device_map=device_map,
         offload_folder="offload",
         torch_dtype=torch.float16
     )
-    crypto_model.gradient_checkpointing_enable()  # Enable gradient checkpointing
+    subject_model.gradient_checkpointing_enable()  # Enable gradient checkpointing
     
-    # Apply cryptography weights to the model's embedding layer
+    # Apply subject weights to the model's embedding layer
     with torch.no_grad():
-        # Ensure crypto_weights has the correct shape
-        crypto_weights = torch.tensor(crypto_weights, dtype=torch.float16)
-        if crypto_weights.dim() == 0:  # If it's a scalar
-            crypto_weights = crypto_weights.expand(crypto_model.model.embed_tokens.weight.shape)
-        elif crypto_weights.dim() == 1:  # If it's a 1D tensor
-            crypto_weights = crypto_weights.unsqueeze(1).expand(crypto_model.model.embed_tokens.weight.shape)
+        # Ensure subject_weights has the correct shape
+        subject_weights = torch.tensor(subject_weights, dtype=torch.float16)
+        if subject_weights.dim() == 0:  # If it's a scalar
+            subject_weights = subject_weights.expand(subject_model.model.embed_tokens.weight.shape)
+        elif subject_weights.dim() == 1:  # If it's a 1D tensor
+            subject_weights = subject_weights.unsqueeze(1).expand(subject_model.model.embed_tokens.weight.shape)
         
-        print(f"crypto_weights shape: {crypto_weights.shape}")
-        print(f"embed_tokens weight shape: {crypto_model.model.embed_tokens.weight.shape}")
+        print(f"subject_weights shape: {subject_weights.shape}")
+        print(f"embed_tokens weight shape: {subject_model.model.embed_tokens.weight.shape}")
         
         # Ensure the shapes match
-        if crypto_weights.shape != crypto_model.model.embed_tokens.weight.shape:
-            raise ValueError(f"Shape mismatch: crypto_weights {crypto_weights.shape} vs embed_tokens {crypto_model.model.embed_tokens.weight.shape}")
+        if subject_weights.shape != subject_model.model.embed_tokens.weight.shape:
+            raise ValueError(f"Shape mismatch: subject_weights {subject_weights.shape} vs embed_tokens {subject_model.model.embed_tokens.weight.shape}")
         
         # Apply the weights
-        crypto_model.model.embed_tokens.weight *= crypto_weights.to(crypto_model.model.embed_tokens.weight.device)
+        subject_model.model.embed_tokens.weight *= subject_weights.to(subject_model.model.embed_tokens.weight.device)
     
-    return crypto_model
+    return subject_model
 
-# Create and save cryptography-specific model
-print("Creating cryptography-specific model...")
-crypto_model = create_cryptography_model(crypto_weights)
-print(crypto_model)  # Print model structure for debugging
+# Create and save subject-specific model
+print(f"Creating {topic}-specific model...")
+subject_model = create_subject_model(subject_weights)
+print(subject_model)  # Print model structure for debugging
 
 # Save the model in smaller chunks
 print("Saving model...")
-crypto_model.save_pretrained(
-    "cryptography_model", 
+model_path = os.path.join(topic, f'{topic}_model')
+subject_model.save_pretrained(
+    model_path, 
     safe_serialization=True,
     max_shard_size="500MB"  # Adjust this value based on available memory
 )
-tokenizer.save_pretrained("cryptography_model")
-print("Cryptography model saved.")
+tokenizer.save_pretrained(model_path)
+print(f"{topic} model saved to {model_path}")
 
-print("Cryptography-specific model has been created and saved.")
+print(f"{topic}-specific model has been created and saved.")
